@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>John's Drive</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    body {font-family: 'Segoe UI', Roboto, Arial, sans-serif; margin:0; background:#f3f4f6; color:#1f2937;}
+    header {
+      background: linear-gradient(90deg,#2563eb,#4f46e5);
+      color:white;
+      padding:20px;
+      text-align:center;
+      box-shadow:0 2px 6px rgba(0,0,0,0.2);
+    }
+    h1 {margin:0; font-size:22px;}
+    main {max-width:900px; margin:30px auto; padding:0 16px;}
+    .search-box {margin-bottom:16px; display:flex; gap:10px;}
+    .search-box input {
+      flex:1; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:14px;
+    }
+    table {width:100%; border-collapse:collapse; background:white; border-radius:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.08);}
+    th, td {padding:12px; border-bottom:1px solid #e5e7eb; text-align:left; font-size:14px;}
+    th {background:#f9fafb;}
+    tr:hover {background:#f3f4f6;}
+    .icon {margin-right:6px;}
+    .download-btn {
+      color:#2563eb; text-decoration:none; font-weight:500;
+    }
+    .download-btn:hover {text-decoration:underline;}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>John's Drive</h1>
+  </header>
+
+  <main>
+    <div class="search-box">
+      <input type="text" id="search" placeholder="Zoek op bestandsnaam..." />
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Naam</th>
+          <th>Download</th>
+        </tr>
+      </thead>
+      <tbody id="file-list">
+        <tr><td colspan="2">Bestanden worden geladen...</td></tr>
+      </tbody>
+    </table>
+  </main>
+
+  <script>
+    const user = "drivejohn24-design";      // jouw GitHub gebruikersnaam
+    const repo = "John-Hoek-Drive";         // jouw repo
+    const branch = "main";                  // pas aan als je gh-pages branch gebruikt
+    const folder = "files";                 // map waar je bestanden zet
+
+    function getIcon(name) {
+      const lower = name.toLowerCase();
+      if (lower.endsWith(".pdf")) return '<i class="fa-solid fa-file-pdf icon" style="color:#e11d48"></i>';
+      if (lower.endsWith(".doc") || lower.endsWith(".docx")) return '<i class="fa-solid fa-file-word icon" style="color:#2563eb"></i>';
+      if (lower.endsWith(".xls") || lower.endsWith(".xlsx")) return '<i class="fa-solid fa-file-excel icon" style="color:#22c55e"></i>';
+      if (lower.endsWith(".ppt") || lower.endsWith(".pptx")) return '<i class="fa-solid fa-file-powerpoint icon" style="color:#f97316"></i>';
+      if (lower.match(/\.(jpg|jpeg|png|gif|bmp|svg)$/)) return '<i class="fa-solid fa-file-image icon" style="color:#db2777"></i>';
+      if (lower.endsWith(".txt")) return '<i class="fa-solid fa-file-lines icon" style="color:#374151"></i>';
+      return '<i class="fa-solid fa-file icon" style="color:#6b7280"></i>';
+    }
+
+    async function loadFiles() {
+      const url = `https://api.github.com/repos/${user}/${repo}/contents/${folder}?ref=${branch}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Kon bestanden niet ophalen");
+        const files = await res.json();
+        window.allFiles = files; // opslaan voor zoeken
+        renderFiles(files);
+      } catch (e) {
+        document.getElementById("file-list").innerHTML =
+          `<tr><td colspan="2">Fout bij laden: ${e.message}</td></tr>`;
+      }
+    }
+
+    function renderFiles(files) {
+      const tbody = document.getElementById("file-list");
+      if (!files.length) {
+        tbody.innerHTML = "<tr><td colspan='2'>Geen bestanden gevonden</td></tr>";
+        return;
+      }
+
+      tbody.innerHTML = files.map(f => {
+        const rawUrl = `https://raw.githubusercontent.com/${user}/${repo}/${branch}/${folder}/${f.name}`;
+        return `
+          <tr>
+            <td>${getIcon(f.name)} ${f.name}</td>
+            <td><a class="download-btn" href="${rawUrl}" download>Download</a></td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    document.getElementById("search").addEventListener("input", e => {
+      const q = e.target.value.toLowerCase();
+      const filtered = window.allFiles.filter(f => f.name.toLowerCase().includes(q));
+      renderFiles(filtered);
+    });
+
+    loadFiles();
+  </script>
+</body>
+</html>

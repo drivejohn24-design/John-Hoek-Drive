@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>John's Drive</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    body {font-family: 'Segoe UI', Roboto, Arial, sans-serif; margin:0; background:#f3f4f6; color:#1f2937;}
+    header {
+      background: linear-gradient(90deg,#2563eb,#4f46e5);
+      color:white;
+      padding:20px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.2);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    header h1 {margin:0; font-size:22px;}
+    .wrap {display:grid; grid-template-columns:320px 1fr; gap:24px; max-width:1200px; margin:24px auto; padding:0 16px;}
+    .card {background:white; padding:20px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.08);}
+    h3 {margin-top:0; color:#111827;}
+    label {display:block; margin-top:12px; font-size:14px; font-weight:500;}
+    input[type=text] {width:100%; padding:10px; margin-top:6px; border:1px solid #d1d5db; border-radius:8px; font-size:14px;}
+    button {margin-top:14px; padding:10px 14px; background:#2563eb; color:white; border:none; border-radius:8px; cursor:pointer; font-size:14px; transition:background .2s;}
+    button:hover {background:#1e40af;}
+    table {width:100%; border-collapse:collapse;}
+    th, td {padding:10px; border-bottom:1px solid #e5e7eb; text-align:left; font-size:14px;}
+    th {background:#f9fafb;}
+    .icon {margin-right:6px;}
+    .actions {display:flex; gap:8px;}
+    .search {margin-bottom:16px; display:flex; gap:10px;}
+    .search input {flex:1; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:14px;}
+    .search button {margin-top:0;}
+    /* Nieuwe uploadstijl */
+    .upload-box {
+      border: 2px dashed #93c5fd;
+      border-radius: 12px;
+      background: #f9fafb;
+      padding: 30px;
+      text-align: center;
+      transition: background 0.3s, border-color 0.3s;
+      cursor: pointer;
+      margin-top:12px;
+    }
+    .upload-box:hover {
+      background: #eff6ff;
+      border-color: #2563eb;
+    }
+    .upload-box i {
+      font-size: 40px;
+      color: #2563eb;
+      margin-bottom: 10px;
+    }
+    .upload-box p {
+      margin: 8px 0;
+      color: #374151;
+      font-size: 14px;
+    }
+    .upload-box input[type="file"] {
+      display: none;
+    }
+    .btn-primary {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 10px 16px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover {
+      background: #1e40af;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>John's Drive</h1>
+  </header>
+
+  <div class="wrap">
+    <aside class="card">
+      <h3>Bestanden uploaden</h3>
+      <form id="form">
+        <label>Naam (optioneel)<input id="name" type="text"></label>
+        
+        <!-- Nieuw modern uploadvak -->
+        <label class="upload-box" for="file">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          <p>Klik om bestanden te kiezen of sleep ze hierheen</p>
+          <input id="file" type="file" multiple required>
+        </label>
+
+        <button type="submit" class="btn-primary">Opslaan</button>
+      </form>
+    </aside>
+
+    <section class="card">
+      <h3>Mijn bestanden</h3>
+      <div class="search">
+        <input id="search" type="text" placeholder="Zoek op naam, categorie of datum..." />
+        <button id="btn-search">Zoeken</button>
+        <button id="btn-delete-selected">Verwijder geselecteerde</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="select-all"></th>
+            <th>Naam</th>
+            <th>Categorie</th>
+            <th>Grootte</th>
+            <th>Datum</th>
+            <th>Acties</th>
+          </tr>
+        </thead>
+        <tbody id="list"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    let db;
+    const DB_NAME = 'mijn-drive';
+    const DB_VERSION = 1;
+
+    const openReq = indexedDB.open(DB_NAME, DB_VERSION);
+    openReq.onupgradeneeded = e => {
+      db = e.target.result;
+      if(!db.objectStoreNames.contains('files')){
+        db.createObjectStore('files', {keyPath:'id', autoIncrement:true});
+      }
+    }
+    openReq.onsuccess = e => { db = e.target.result; render(); }
+
+    function detectCategory(file) {
+      const type = file.type;
+      const name = file.name.toLowerCase();
+
+      if (type.includes("pdf") || name.endsWith(".pdf")) return "PDF";
+      if (type.includes("word") || name.endsWith(".doc") || name.endsWith(".docx")) return "Word";
+      if (type.includes("presentation") || name.endsWith(".ppt") || name.endsWith(".pptx")) return "PowerPoint";
+      if (type.includes("spreadsheet") || name.endsWith(".xls") || name.endsWith(".xlsx")) return "Excel";
+      if (type.startsWith("text/") || name.endsWith(".txt")) return "TXT";
+      if (type.startsWith("image/") || name.match(/\.(jpg|jpeg|png|gif|bmp|svg)$/)) return "Afbeelding";
+
+      return "Onbekend";
+    }
+
+    function addFiles(files, name){
+      [...files].forEach(file=>{
+        const reader = new FileReader();
+        reader.onload = function(){
+          const data = { 
+            name: name || file.name, 
+            category: detectCategory(file),
+            type:file.type, 
+            size:file.size, 
+            date:new Date().toLocaleString(), 
+            blob:reader.result 
+          };
+          const tx = db.transaction('files','readwrite');
+          tx.objectStore('files').add(data);
+          tx.oncomplete = () => render();
+        }
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function getAllFiles(cb){
+      const tx = db.transaction('files','readonly');
+      const store = tx.objectStore('files');
+      const req = store.getAll();
+      req.onsuccess = ()=> cb(req.result);
+    }
+
+    function deleteFiles(ids){
+      const tx = db.transaction('files','readwrite');
+      const store = tx.objectStore('files');
+      ids.forEach(id=> store.delete(id));
+      tx.oncomplete = () => render();
+    }
+
+    function render(filter=''){
+      getAllFiles(files => {
+        const list = document.getElementById('list');
+        if(!files.length){ list.innerHTML = '<tr><td colspan="6">Geen bestanden opgeslagen.</td></tr>'; return; }
+
+        const search = filter.toLowerCase();
+        const filtered = files.filter(f =>
+          f.name.toLowerCase().includes(search) ||
+          f.category.toLowerCase().includes(search) ||
+          f.date.toLowerCase().includes(search)
+        );
+
+        if(!filtered.length){ list.innerHTML = '<tr><td colspan="6">Geen resultaten gevonden.</td></tr>'; return; }
+
+        list.innerHTML = filtered.map(f=>{
+          let icon = '<i class="fa-solid fa-file icon"></i>';
+          if(f.category === 'PDF') icon = '<i class="fa-solid fa-file-pdf icon" style="color:#e11d48"></i>';
+          else if(f.category === 'Word') icon = '<i class="fa-solid fa-file-word icon" style="color:#2563eb"></i>';
+          else if(f.category === 'Excel') icon = '<i class="fa-solid fa-file-excel icon" style="color:#22c55e"></i>';
+          else if(f.category === 'PowerPoint') icon = '<i class="fa-solid fa-file-powerpoint icon" style="color:#f97316"></i>';
+          else if(f.category === 'TXT') icon = '<i class="fa-solid fa-file-lines icon" style="color:#374151"></i>';
+          else if(f.category === 'Afbeelding') icon = '<i class="fa-solid fa-file-image icon" style="color:#db2777"></i>';
+          else icon = '<i class="fa-solid fa-file-circle-question icon" style="color:#6b7280"></i>';
+
+          return `
+            <tr>
+              <td><input type="checkbox" class="select-file" value="${f.id}"></td>
+              <td>${icon} ${escapeHtml(f.name)}</td>
+              <td>${f.category}</td>
+              <td>${(f.size/1024).toFixed(1)} KB</td>
+              <td>${f.date}</td>
+              <td class="actions">
+                <a href="${f.blob}" download="${escapeHtml(f.name)}">Download</a>
+              </td>
+            </tr>`;
+        }).join('');
+      });
+    }
+
+    document.getElementById('form').addEventListener('submit', e=>{
+      e.preventDefault();
+      const files = document.getElementById('file').files;
+      if(!files.length) return;
+      const name = document.getElementById('name').value.trim();
+      addFiles(files, name);
+      e.target.reset();
+    });
+
+    document.getElementById('btn-search').addEventListener('click', ()=>{
+      const q = document.getElementById('search').value.trim();
+      render(q);
+    });
+    document.getElementById('search').addEventListener('input', e=> render(e.target.value.trim()));
+
+    document.getElementById('select-all').addEventListener('change', e=>{
+      document.querySelectorAll('.select-file').forEach(cb=> cb.checked = e.target.checked);
+    });
+
+    document.getElementById('btn-delete-selected').addEventListener('click', ()=>{
+      const ids = [...document.querySelectorAll('.select-file:checked')].map(cb=> parseInt(cb.value));
+      if(ids.length) deleteFiles(ids);
+    });
+
+    function escapeHtml(s){return (s+'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]))}
+  </script>
+</body>
+</html>
